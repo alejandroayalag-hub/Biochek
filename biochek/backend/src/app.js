@@ -13,5 +13,10 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/sedes', sedesRouter);
 
+  app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(500).json({ error: 'internal server error' });
+  });
+
   return app;
 }
