@@ -9,6 +9,7 @@ import { requireRole } from '../src/middleware/requireRole.js';
 let server, baseUrl;
 
 test.before(async () => {
+  await pool.query('DELETE FROM audit_log');
   await pool.query('DELETE FROM usuarios');
   const hash = await hashPassword('secret123');
   await pool.query(
