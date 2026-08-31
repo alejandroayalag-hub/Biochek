@@ -1,6 +1,7 @@
 import express from 'express';
 import authRouter from './routes/auth.js';
 import sedesRouter from './routes/sedes.js';
+import empleadosRouter from './routes/empleados.js';
 
 export function createApp() {
   const app = express();
@@ -12,6 +13,7 @@ export function createApp() {
 
   app.use('/api/auth', authRouter);
   app.use('/api/sedes', sedesRouter);
+  app.use('/api/empleados', empleadosRouter);
 
   app.use((err, req, res, next) => {
     console.error(err);
