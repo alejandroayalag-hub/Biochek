@@ -1,4 +1,5 @@
 import express from 'express';
+import authRouter from './routes/auth.js';
 
 export function createApp() {
   const app = express();
@@ -7,6 +8,8 @@ export function createApp() {
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
   });
+
+  app.use('/api/auth', authRouter);
 
   return app;
 }
