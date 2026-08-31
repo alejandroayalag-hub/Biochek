@@ -1,5 +1,6 @@
 import express from 'express';
 import authRouter from './routes/auth.js';
+import sedesRouter from './routes/sedes.js';
 
 export function createApp() {
   const app = express();
@@ -10,6 +11,7 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/sedes', sedesRouter);
 
   return app;
 }
