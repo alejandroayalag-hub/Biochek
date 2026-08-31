@@ -18,5 +18,13 @@ router.get('/', listChecadas);
 // API key/HMAC scheme respectively) and adjust this route's middleware
 // accordingly — do not ship the mobile app or device adapter assuming
 // admin login is how they authenticate.
+//
+// Related gap: `origen` is currently read directly from the request body
+// and trusted — nothing stops an authenticated caller from claiming
+// `origen: 'dispositivo'` to skip geofence validation (which only runs
+// for `origen === 'app'`). The mobile app plan and device adapter plan
+// must derive `origen` from the authentication mechanism itself (employee
+// token -> force `app`; device API key -> force `dispositivo`), never
+// trust it from the body.
 
 export default router;

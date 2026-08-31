@@ -2,13 +2,13 @@ import { pool } from '../db/pool.js';
 import { isWithinGeofence } from '../utils/geofence.js';
 
 export async function createChecada(req, res, next) {
+  const { empleado_id, tipo, origen, lat, lng, metodo, dispositivo_id } = req.body;
+
+  if (!empleado_id || !['entrada', 'salida'].includes(tipo) || !['app', 'dispositivo'].includes(origen)) {
+    return res.status(400).json({ error: 'empleado_id, tipo (entrada|salida), origen (app|dispositivo) required' });
+  }
+
   try {
-    const { empleado_id, tipo, origen, lat, lng, metodo, dispositivo_id } = req.body;
-
-    if (!empleado_id || !['entrada', 'salida'].includes(tipo) || !['app', 'dispositivo'].includes(origen)) {
-      return res.status(400).json({ error: 'empleado_id, tipo (entrada|salida), origen (app|dispositivo) required' });
-    }
-
     const empleadoResult = await pool.query(
       `SELECT e.id, e.estado, s.lat AS sede_lat, s.lng AS sede_lng, s.radio_metros
        FROM empleados e JOIN sedes s ON s.id = e.sede_id
@@ -32,18 +32,29 @@ export async function createChecada(req, res, next) {
       }
     }
 
-    const result = await pool.query(
-      `INSERT INTO checadas (empleado_id, tipo, origen, dispositivo_id, lat, lng, metodo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [empleado_id, tipo, origen, dispositivo_id || null, lat ?? null, lng ?? null, metodo || null]
-    );
+    const client = await pool.connect();
+    let checada;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO checadas (empleado_id, tipo, origen, dispositivo_id, lat, lng, metodo)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [empleado_id, tipo, origen, dispositivo_id || null, lat ?? null, lng ?? null, metodo || null]
+      );
+      checada = result.rows[0];
+      await client.query(
+        `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES ($1, $2, $3)`,
+        [req.user?.id || null, 'checada_creada', `empleado_id=${empleado_id} tipo=${tipo}`]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
-    await pool.query(
-      `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES ($1, $2, $3)`,
-      [req.user?.id || null, 'checada_creada', `empleado_id=${empleado_id} tipo=${tipo}`]
-    );
-
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(checada);
   } catch (err) {
     next(err);
   }
