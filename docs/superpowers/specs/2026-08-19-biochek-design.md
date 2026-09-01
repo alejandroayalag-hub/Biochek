@@ -4,6 +4,13 @@
 **Estado:** Aprobado para implementación
 **Cliente:** Privado (no identificar en este documento)
 
+> **Actualización 2026-08-31:** por decisión del cliente, v1 corre **solo
+> vía app móvil** para todos los empleados (fijos y remotos). Los relojes
+> checadores comerciales de sedes fijas (§6, adapter ADMS) quedan
+> **pospuestos**, no descartados — se retoman en fase posterior. Referencias
+> a "sedes fijas usan reloj" en este documento describen la arquitectura
+> objetivo a futuro, no el alcance de v1.
+
 ## 1. Propósito
 
 Sistema de asistencia biométrica para un cliente de 500–800 empleados que
