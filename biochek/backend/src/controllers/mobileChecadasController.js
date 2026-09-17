@@ -7,15 +7,27 @@ import { saveEncryptedFile } from '../utils/fileStorage.js';
 const FAILURE_ALERT_THRESHOLD = 3;
 
 function timestampDriftMs() {
-  return parseInt(process.env.TIMESTAMP_DRIFT_THRESHOLD_MS || '300000', 10);
+  const parsed = parseInt(process.env.TIMESTAMP_DRIFT_THRESHOLD_MS, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 300000;
 }
 
 async function flagRepeatedFailures(empleadoId) {
+  // `detalle` is a hand-formatted string, not a structured column, and its
+  // exact shape differs by writer: this mobile controller writes
+  // `empleado_id=<id>`, while the admin/kiosk path (checadasController.js)
+  // writes `empleado_id=<id> tipo=<tipo>`. Match on the `empleado_id=<id>`
+  // prefix (anchored with a trailing space or end-of-string so id 5 never
+  // matches id 50) so a success recorded by either path is seen here and
+  // can break a failure streak. Including 'alerta_rh_fallos_repetidos' in
+  // the action list means a fired alert also breaks the streak, so it
+  // takes 3 NEW consecutive failures after an alert to fire another one.
+  const prefix = `empleado_id=${empleadoId}`;
   const recent = await pool.query(
     `SELECT accion FROM audit_log
-     WHERE detalle = $1 AND accion IN ('checada_rechazada_match', 'checada_creada')
+     WHERE (detalle = $1 OR detalle LIKE $1 || ' %')
+       AND accion IN ('checada_rechazada_match', 'checada_creada', 'alerta_rh_fallos_repetidos')
      ORDER BY created_at DESC LIMIT $2`,
-    [`empleado_id=${empleadoId}`, FAILURE_ALERT_THRESHOLD]
+    [prefix, FAILURE_ALERT_THRESHOLD]
   );
   const allFailures =
     recent.rows.length === FAILURE_ALERT_THRESHOLD &&
@@ -61,12 +73,20 @@ export async function createChecadaMobile(req, res, next) {
     }
 
     const empleadoResult = await pool.query(
-      `SELECT s.lat AS sede_lat, s.lng AS sede_lng, s.radio_metros
+      `SELECT e.estado, s.lat AS sede_lat, s.lng AS sede_lng, s.radio_metros
        FROM empleados e JOIN sedes s ON s.id = e.sede_id
        WHERE e.id = $1`,
       [empleadoId]
     );
     const sede = empleadoResult.rows[0];
+    if (sede.estado !== 'activo') {
+      // Employee JWTs live for EMPLEADO_JWT_EXPIRES_IN (default 30d) and
+      // estado is otherwise only checked at login, so a dismissed employee
+      // could otherwise keep a working check-in token for weeks. Same
+      // status/message as the admin/kiosk path (checadasController.js) for
+      // consistency.
+      return res.status(409).json({ error: 'empleado inactivo' });
+    }
     if (!isWithinGeofence({ lat, lng }, { lat: sede.sede_lat, lng: sede.sede_lng, radio_metros: sede.radio_metros })) {
       return res.status(422).json({ error: 'fuera de geocerca' });
     }
