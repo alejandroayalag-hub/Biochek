@@ -17,6 +17,25 @@ test('001_core_schema creates all expected tables', async () => {
   }
 });
 
+test('003_mobile adds employee PIN, enrollment state, and checada audit columns', async () => {
+  await runMigrations();
+
+  const cols = async (table) => {
+    const result = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+      [table]
+    );
+    return result.rows.map(r => r.column_name);
+  };
+
+  assert.ok((await cols('empleados')).includes('pin_hash'));
+  assert.ok((await cols('enrolamientos_biometricos')).includes('estado'));
+  assert.ok((await cols('enrolamientos_biometricos')).includes('foto_urls'));
+  assert.ok((await cols('checadas')).includes('score_verificacion'));
+  assert.ok((await cols('checadas')).includes('foto_url'));
+  assert.ok((await cols('checadas')).includes('timestamp_dispositivo'));
+});
+
 test.after(async () => {
   await pool.end();
 });
