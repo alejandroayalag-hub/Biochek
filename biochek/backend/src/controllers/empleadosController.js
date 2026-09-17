@@ -1,4 +1,6 @@
 import { pool } from '../db/pool.js';
+import { hashPassword } from '../utils/password.js';
+import { generatePin } from '../utils/pin.js';
 
 export async function listEmpleados(req, res, next) {
   try {
@@ -15,12 +17,15 @@ export async function createEmpleado(req, res, next) {
     if (!nombre || !codigo_noi || !sede_id) {
       return res.status(400).json({ error: 'nombre, codigo_noi, sede_id required' });
     }
+    const pin = generatePin();
+    const pinHash = await hashPassword(pin);
     const result = await pool.query(
-      `INSERT INTO empleados (nombre, codigo_noi, sede_id, estado)
-       VALUES ($1, $2, $3, 'activo') RETURNING *`,
-      [nombre, codigo_noi, sede_id]
+      `INSERT INTO empleados (nombre, codigo_noi, sede_id, estado, pin_hash)
+       VALUES ($1, $2, $3, 'activo', $4) RETURNING *`,
+      [nombre, codigo_noi, sede_id, pinHash]
     );
-    res.status(201).json(result.rows[0]);
+    const { pin_hash, ...empleado } = result.rows[0];
+    res.status(201).json({ ...empleado, pin });
   } catch (err) {
     next(err);
   }
@@ -48,6 +53,22 @@ export async function deleteEmpleado(req, res, next) {
     const result = await pool.query('DELETE FROM empleados WHERE id = $1 RETURNING id', [id]);
     if (!result.rows[0]) return res.status(404).json({ error: 'not found' });
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resetPin(req, res, next) {
+  try {
+    const { id } = req.params;
+    const pin = generatePin();
+    const pinHash = await hashPassword(pin);
+    const result = await pool.query(
+      `UPDATE empleados SET pin_hash = $1 WHERE id = $2 RETURNING id`,
+      [pinHash, id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'not found' });
+    res.json({ pin });
   } catch (err) {
     next(err);
   }

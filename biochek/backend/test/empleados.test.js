@@ -50,6 +50,32 @@ test('GET /api/empleados lists created empleados', async () => {
   assert.ok(body.some(e => e.codigo_noi === 'E001'));
 });
 
+test('POST /api/empleados also returns a plaintext PIN for first login', async () => {
+  const res = await authed('/api/empleados', {
+    method: 'POST',
+    body: JSON.stringify({ nombre: 'Rosa Gómez', codigo_noi: 'E002', sede_id: sedeId }),
+  });
+  const body = await res.json();
+
+  assert.equal(res.status, 201);
+  assert.match(body.pin, /^\d{6}$/);
+});
+
+test('POST /api/empleados/:id/reset-pin issues a new PIN', async () => {
+  const create = await authed('/api/empleados', {
+    method: 'POST',
+    body: JSON.stringify({ nombre: 'Carlos Ruiz', codigo_noi: 'E003', sede_id: sedeId }),
+  });
+  const empleado = await create.json();
+
+  const res = await authed(`/api/empleados/${empleado.id}/reset-pin`, { method: 'POST' });
+  const body = await res.json();
+
+  assert.equal(res.status, 200);
+  assert.match(body.pin, /^\d{6}$/);
+  assert.notEqual(body.pin, empleado.pin);
+});
+
 test.after(async () => {
   server.close();
   await pool.end();
