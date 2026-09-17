@@ -5,6 +5,7 @@ import sedesRouter from './routes/sedes.js';
 import empleadosRouter from './routes/empleados.js';
 import checadasRouter from './routes/checadas.js';
 import mobileRouter from './routes/mobile.js';
+import enrolamientosRouter from './routes/enrolamientos.js';
 
 export function createApp() {
   const app = express();
@@ -20,6 +21,7 @@ export function createApp() {
   app.use('/api/empleados', empleadosRouter);
   app.use('/api/checadas', checadasRouter);
   app.use('/api/mobile', mobileRouter);
+  app.use('/api/enrolamientos', enrolamientosRouter);
 
   app.use((err, req, res, next) => {
     console.error(err);
