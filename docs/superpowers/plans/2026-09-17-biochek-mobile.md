@@ -614,6 +614,12 @@ test.before(async () => {
   );
   empleadoId = empleado.rows[0].id;
 
+  await pool.query(
+    `INSERT INTO empleados (nombre, codigo_noi, sede_id, estado, pin_hash)
+     VALUES ('Empleado Baja', 'E901', $1, 'baja', $2)`,
+    [sedeId, pinHash]
+  );
+
   const app = createApp();
   server = app.listen(0);
   baseUrl = `http://localhost:${server.address().port}`;
@@ -650,6 +656,15 @@ test('POST /api/auth/empleado/login for an unknown codigo_noi returns 401', asyn
     body: JSON.stringify({ codigo_noi: 'NOPE', pin: '123456' }),
   });
   assert.equal(res.status, 401);
+});
+
+test('POST /api/auth/empleado/login for an inactive (baja) empleado returns 403', async () => {
+  const res = await fetch(`${baseUrl}/api/auth/empleado/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigo_noi: 'E901', pin: '123456' }),
+  });
+  assert.equal(res.status, 403);
 });
 
 test.after(async () => {
@@ -1295,6 +1310,41 @@ test('GET /api/mobile/checadas returns only the authenticated employee\'s histor
   assert.equal(res.status, 200);
   assert.ok(body.every(c => c.empleado_id === empleadoId));
   assert.ok(body.length >= 1);
+});
+
+test('3 consecutive match failures for the same empleado create an RH alert', async () => {
+  // Fresh empleado, isolated from the matching-embedding test above so the
+  // "last 3 attempts" window used by flagRepeatedFailures only sees failures.
+  const sede = await pool.query(
+    `INSERT INTO sedes (nombre, lat, lng, radio_metros) VALUES ('Planta Alerta', 20.6736, -103.344, 100) RETURNING id`
+  );
+  const empleado = await pool.query(
+    `INSERT INTO empleados (nombre, codigo_noi, sede_id, estado) VALUES ('Alerta Test', 'E931', $1, 'activo') RETURNING id`,
+    [sede.rows[0].id]
+  );
+  const alertaEmpleadoId = empleado.rows[0].id;
+  const alertaToken = jwt.sign({ empleado_id: alertaEmpleadoId, role: 'empleado' }, process.env.JWT_SECRET);
+  await pool.query(
+    `INSERT INTO enrolamientos_biometricos (empleado_id, tipo, embedding_cifrado, fecha_expiracion_retencion, estado)
+     VALUES ($1, 'rostro', $2, now() + interval '5 years', 'aprobado')`,
+    [alertaEmpleadoId, encryptEmbedding(KNOWN_EMBEDDING)]
+  );
+
+  const mismatchedEmbedding = Array(128).fill(0).map((_, i) => (i % 2 === 0 ? 0 : 1)); // orthogonal to KNOWN_EMBEDDING
+  for (let i = 0; i < 3; i++) {
+    const res = await fetch(`${baseUrl}/api/mobile/checadas`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${alertaToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(checadaPayload({ embedding: mismatchedEmbedding })),
+    });
+    assert.equal(res.status, 401);
+  }
+
+  const alertRows = await pool.query(
+    `SELECT * FROM audit_log WHERE accion = 'alerta_rh_fallos_repetidos' AND detalle = $1`,
+    [`empleado_id=${alertaEmpleadoId}`]
+  );
+  assert.equal(alertRows.rows.length, 1);
 });
 
 test.after(async () => {
