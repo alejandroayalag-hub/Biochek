@@ -9,6 +9,7 @@ let server, baseUrl, token;
 
 test.before(async () => {
   await pool.query('DELETE FROM checadas');
+  await pool.query('DELETE FROM enrolamientos_biometricos');
   await pool.query('DELETE FROM empleados');
   await pool.query('DELETE FROM sedes');
   token = jwt.sign({ id: 1, email: 'rh@cliente.test', role: 'admin' }, process.env.JWT_SECRET);

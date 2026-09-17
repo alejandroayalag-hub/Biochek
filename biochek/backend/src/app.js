@@ -4,10 +4,11 @@ import authEmpleadoRouter from './routes/authEmpleado.js';
 import sedesRouter from './routes/sedes.js';
 import empleadosRouter from './routes/empleados.js';
 import checadasRouter from './routes/checadas.js';
+import mobileRouter from './routes/mobile.js';
 
 export function createApp() {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' })); // enrollment photos are base64
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
@@ -18,6 +19,7 @@ export function createApp() {
   app.use('/api/sedes', sedesRouter);
   app.use('/api/empleados', empleadosRouter);
   app.use('/api/checadas', checadasRouter);
+  app.use('/api/mobile', mobileRouter);
 
   app.use((err, req, res, next) => {
     console.error(err);
