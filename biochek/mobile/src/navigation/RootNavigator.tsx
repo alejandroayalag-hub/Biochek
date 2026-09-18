@@ -1,9 +1,9 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text } from 'react-native';
 import { LoginScreen } from '../screens/LoginScreen';
 import { EnrollmentWizardScreen } from '../screens/EnrollmentWizardScreen';
 import { EnrollmentPendingScreen } from '../screens/EnrollmentPendingScreen';
+import { HomeScreen } from '../screens/HomeScreen';
 import { apiClient } from '../api/client';
 import { getToken } from '../auth/session';
 
@@ -15,14 +15,6 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-function PlaceholderScreen({ name }: { name: string }) {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>{name} — pending implementation</Text>
-    </View>
-  );
-}
 
 export function RootNavigator() {
   return (
@@ -46,7 +38,7 @@ export function RootNavigator() {
         <Stack.Screen name="EnrollmentPending" children={({ navigation }) => (
           <EnrollmentPendingScreen onApproved={() => navigation.replace('Home')} />
         )} />
-        <Stack.Screen name="Home" children={() => <PlaceholderScreen name="Home" />} />
+        <Stack.Screen name="Home" component={HomeScreen} options={{ headerBackVisible: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
