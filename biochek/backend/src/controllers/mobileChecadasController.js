@@ -6,9 +6,38 @@ import { saveEncryptedFile } from '../utils/fileStorage.js';
 
 const FAILURE_ALERT_THRESHOLD = 3;
 
-function timestampDriftMs() {
-  const parsed = parseInt(process.env.TIMESTAMP_DRIFT_THRESHOLD_MS, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 300000;
+const DEFAULT_DRIFT_MS = 300000; // 5 min
+const DEFAULT_OFFLINE_DRIFT_MS = 86400000; // 24 h
+
+function envMs(name, fallback) {
+  const parsed = parseInt(process.env[name], 10);
+  // Fail closed: a garbage/absent value falls back to the safe default
+  // rather than disabling the check via a NaN comparison.
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * Allowed clock drift between `timestamp_dispositivo` and server time.
+ *
+ * Normal (live) submissions keep the tight anti-replay/clock-integrity
+ * window of spec §5. A submission explicitly flagged `enviado_diferido`
+ * (the mobile offline queue retrying a checada captured while the device
+ * had no network — spec §2.4) gets a much wider window, because by
+ * definition it was captured minutes-to-hours before it could be sent.
+ * Without this, anything queued for longer than the normal window is
+ * rejected forever and the employee's real check-in is lost.
+ */
+function timestampDriftMs(enviadoDiferido) {
+  return enviadoDiferido
+    ? envMs('OFFLINE_TIMESTAMP_DRIFT_THRESHOLD_MS', DEFAULT_OFFLINE_DRIFT_MS)
+    : envMs('TIMESTAMP_DRIFT_THRESHOLD_MS', DEFAULT_DRIFT_MS);
+}
+
+async function auditRejection(empleadoId, accion, detalle) {
+  await pool.query(
+    `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES (NULL, $1, $2)`,
+    [accion, `empleado_id=${empleadoId}${detalle ? ` ${detalle}` : ''}`]
+  );
 }
 
 async function flagRepeatedFailures(empleadoId) {
@@ -42,9 +71,14 @@ async function flagRepeatedFailures(empleadoId) {
 
 export async function createChecadaMobile(req, res, next) {
   const empleadoId = req.user.empleado_id;
-  const { tipo, embedding, lat, lng, timestamp_dispositivo, selfie_base64 } = req.body;
+  const { tipo, embedding, lat, lng, timestamp_dispositivo, selfie_base64, enviado_diferido } = req.body;
 
-  if (!['entrada', 'salida'].includes(tipo) || !Array.isArray(embedding) || lat == null || lng == null) {
+  // `embedding: []` is a real, non-malicious device condition (on-device
+  // extraction can fail and FaceCaptureCamera degrades to an empty vector),
+  // and an empty array passes Array.isArray — without the length check it
+  // reaches cosineSimilarity and throws a length-mismatch error (500, no
+  // audit row). Same guard as mobileEnrolamientosController.createEnrolamiento.
+  if (!['entrada', 'salida'].includes(tipo) || !Array.isArray(embedding) || embedding.length === 0 || lat == null || lng == null) {
     return res.status(400).json({ error: 'tipo, embedding, lat, lng required' });
   }
 
@@ -73,7 +107,7 @@ export async function createChecadaMobile(req, res, next) {
     }
 
     const empleadoResult = await pool.query(
-      `SELECT e.estado, s.lat AS sede_lat, s.lng AS sede_lng, s.radio_metros
+      `SELECT e.estado, e.sede_id, s.lat AS sede_lat, s.lng AS sede_lng, s.radio_metros
        FROM empleados e JOIN sedes s ON s.id = e.sede_id
        WHERE e.id = $1`,
       [empleadoId]
@@ -88,11 +122,22 @@ export async function createChecadaMobile(req, res, next) {
       return res.status(409).json({ error: 'empleado inactivo' });
     }
     if (!isWithinGeofence({ lat, lng }, { lat: sede.sede_lat, lng: sede.sede_lng, radio_metros: sede.radio_metros })) {
+      // Audited like match failures are: a checada that keeps bouncing (e.g.
+      // one stuck in the mobile offline queue) must leave a server-side trace
+      // RH can debug, not fail silently.
+      await auditRejection(empleadoId, 'checada_rechazada_geocerca', `lat=${lat} lng=${lng} sede_id=${sede.sede_id}`);
       return res.status(422).json({ error: 'fuera de geocerca' });
     }
 
+    const diferido = enviado_diferido === true;
     const deviceTime = new Date(timestamp_dispositivo).getTime();
-    if (!timestamp_dispositivo || Number.isNaN(deviceTime) || Math.abs(Date.now() - deviceTime) > timestampDriftMs()) {
+    const driftMs = timestampDriftMs(diferido);
+    if (!timestamp_dispositivo || Number.isNaN(deviceTime) || Math.abs(Date.now() - deviceTime) > driftMs) {
+      await auditRejection(
+        empleadoId,
+        'checada_rechazada_timestamp',
+        `timestamp_dispositivo=${timestamp_dispositivo} diferido=${diferido} umbral_ms=${driftMs}`
+      );
       return res.status(422).json({ error: 'hora del dispositivo fuera de rango, revisa la hora de tu teléfono' });
     }
 
@@ -103,9 +148,15 @@ export async function createChecadaMobile(req, res, next) {
     try {
       await client.query('BEGIN');
       const result = await client.query(
+        // `timestamp` is written from `timestamp_dispositivo` (spec §2.4: the
+        // device's capture time is the real event time), NOT left at the
+        // column's `now()` default — server-arrival time is wrong for anything
+        // synced late, e.g. a checada replayed from the offline queue. Both
+        // columns end up populated; `timestamp_dispositivo` is kept as its own
+        // column so the raw client-reported value stays auditable.
         `INSERT INTO checadas
-           (empleado_id, tipo, origen, lat, lng, metodo, score_verificacion, foto_url, timestamp_dispositivo)
-         VALUES ($1, $2, 'app', $3, $4, 'rostro', $5, $6, $7) RETURNING *`,
+           (empleado_id, tipo, origen, lat, lng, metodo, score_verificacion, foto_url, timestamp_dispositivo, timestamp)
+         VALUES ($1, $2, 'app', $3, $4, 'rostro', $5, $6, $7, $7) RETURNING *`,
         [empleadoId, tipo, lat, lng, score, fotoUrl, timestamp_dispositivo]
       );
       checada = result.rows[0];

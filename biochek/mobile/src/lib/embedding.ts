@@ -55,8 +55,11 @@ export async function loadFaceModel(): Promise<void> {
  *   plain filesystem path.
  * @returns The embedding vector (dimension determined by the loaded model's
  *   output tensor — 192 for the MobileFaceNet conversion currently bundled
- *   at assets/models/mobilefacenet.tflite; see that folder's README.md),
- *   or `[]` if extraction fails.
+ *   at assets/models/mobilefacenet.tflite; see that folder's README.md).
+ * @throws If the model has not been loaded yet, if the photo cannot be
+ *   decoded/resized, or if the model exposes no input tensor. It never
+ *   returns `[]` — callers that want a soft failure must catch (see
+ *   FaceCaptureCamera's handleCapture, which degrades to `[]` itself).
  */
 export async function extractEmbedding(photoPath: string): Promise<number[]> {
   if (!model) {
@@ -65,6 +68,12 @@ export async function extractEmbedding(photoPath: string): Promise<number[]> {
 
   const { loadImage } = await import('react-native-nitro-image');
   const image = await loadImage({ filePath: photoPath });
+  // TODO(face-crop): this resizes the WHOLE photo, not the detected face
+  // bounding box — a known, deliberately deferred gap (see the plan ledger,
+  // .superpowers/sdd/2026-09-17-biochek-mobile/progress.md, Task 13). It
+  // compresses the score dynamic range and is a plausible false-accept risk.
+  // Must be fixed AND the match threshold recalibrated from measured
+  // on-device genuine/impostor scores before any real-employee pilot.
   const resized = await image.resizeAsync(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
   const raw = await resized.toRawPixelDataAsync();
 

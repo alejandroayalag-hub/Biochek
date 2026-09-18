@@ -31,3 +31,11 @@ test('getEnrolledEmbedding returns null when nothing was cached', async () => {
   (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
   await expect(getEnrolledEmbedding()).resolves.toBeNull();
 });
+
+test('getEnrolledEmbedding returns null on a corrupted cached value instead of throwing', async () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('{not json');
+  await expect(getEnrolledEmbedding()).resolves.toBeNull();
+  expect(warn).toHaveBeenCalled();
+  warn.mockRestore();
+});

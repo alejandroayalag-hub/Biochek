@@ -22,5 +22,14 @@ export async function saveEnrolledEmbedding(embedding: number[]): Promise<void> 
 
 export async function getEnrolledEmbedding(): Promise<number[] | null> {
   const raw = await SecureStore.getItemAsync(EMBEDDING_KEY);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (error) {
+    // A corrupted/truncated cached value behaves as "nothing cached": the
+    // local match is skipped and the backend (the source of truth) decides.
+    console.warn('BioChek: cached enrolled embedding is corrupted, ignoring it', error);
+    return null;
+  }
 }

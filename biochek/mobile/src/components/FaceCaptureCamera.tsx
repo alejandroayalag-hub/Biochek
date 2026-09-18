@@ -36,6 +36,7 @@ export function FaceCaptureCamera({ instruction, onCapture }: Props) {
   const photoOutput = usePhotoOutput();
   const samples = useRef<EyeOpenSample[]>([]);
   const [faceDetected, setFaceDetected] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
 
   useEffect(() => {
     loadFaceModel().catch((error) => {
@@ -73,19 +74,29 @@ export function FaceCaptureCamera({ instruction, onCapture }: Props) {
   }, []);
 
   async function handleCapture() {
-    const photoFile = await photoOutput.capturePhotoToFile({}, {});
-    const liveness = evaluateLiveness(samples.current);
-    let embedding: number[] = [];
+    setCaptureError(null);
     try {
-      embedding = await extractEmbedding(photoFile.filePath);
+      const photoFile = await photoOutput.capturePhotoToFile({}, {});
+      const liveness = evaluateLiveness(samples.current);
+      let embedding: number[] = [];
+      try {
+        embedding = await extractEmbedding(photoFile.filePath);
+      } catch (error) {
+        console.warn('BioChek: failed to extract face embedding', error);
+      }
+      // photoFile.filePath is a local file:// URI, not base64 data — read and
+      // base64-encode the actual JPEG bytes so CaptureResult.photoBase64 holds
+      // what its name promises (the backend base64-decodes this field as-is).
+      const photoBase64 = await new File(photoFile.filePath).base64();
+      onCapture({ photoBase64, faceDetected, liveness, embedding });
     } catch (error) {
-      console.warn('BioChek: failed to extract face embedding', error);
+      // Camera capture or reading the captured file failed. Without this the
+      // rejection is unhandled, onCapture never fires and the UI is stuck on
+      // the camera with no feedback at all. Stay on the camera (the parent
+      // only leaves this screen from onCapture) and let the user retry.
+      console.warn('BioChek: failed to capture photo', error);
+      setCaptureError('No se pudo tomar la foto. Inténtalo de nuevo.');
     }
-    // photoFile.filePath is a local file:// URI, not base64 data — read and
-    // base64-encode the actual JPEG bytes so CaptureResult.photoBase64 holds
-    // what its name promises (the backend base64-decodes this field as-is).
-    const photoBase64 = await new File(photoFile.filePath).base64();
-    onCapture({ photoBase64, faceDetected, liveness, embedding });
   }
 
   if (!hasPermission) {
@@ -114,6 +125,7 @@ export function FaceCaptureCamera({ instruction, onCapture }: Props) {
       <View style={styles.overlay}>
         <Text style={styles.instruction}>{instruction}</Text>
         <Text style={styles.status}>{faceDetected ? 'Rostro detectado' : 'Centra tu rostro'}</Text>
+        {captureError && <Text style={styles.error}>{captureError}</Text>}
         <Button title="Capturar" onPress={handleCapture} disabled={!faceDetected} />
       </View>
     </View>
@@ -126,4 +138,5 @@ const styles = StyleSheet.create({
   overlay: { position: 'absolute', bottom: 40, left: 0, right: 0, alignItems: 'center', gap: 8 },
   instruction: { color: 'white', fontSize: 16, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 8 },
   status: { color: 'white', fontSize: 14 },
+  error: { color: '#ff6b6b', fontSize: 14, textAlign: 'center', paddingHorizontal: 16 },
 });

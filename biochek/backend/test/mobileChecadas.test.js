@@ -283,6 +283,138 @@ test('a non-numeric TIMESTAMP_DRIFT_THRESHOLD_MS falls back to the safe default 
   }
 });
 
+test('POST /api/mobile/checadas stores timestamp_dispositivo as the event timestamp, not now()', async () => {
+  // Spec §2.4: the device's capture time is the real event time. Use a
+  // timestamp inside the normal drift window but clearly not "now".
+  const deviceTime = new Date(Date.now() - 2 * 60 * 1000).toISOString(); // 2 min ago
+  const res = await asEmpleado('/api/mobile/checadas', {
+    method: 'POST',
+    body: JSON.stringify(checadaPayload({ timestamp_dispositivo: deviceTime })),
+  });
+  const body = await res.json();
+
+  assert.equal(res.status, 201);
+  assert.equal(new Date(body.timestamp).getTime(), new Date(deviceTime).getTime());
+  assert.equal(new Date(body.timestamp_dispositivo).getTime(), new Date(deviceTime).getTime());
+
+  const stored = await pool.query('SELECT timestamp, timestamp_dispositivo FROM checadas WHERE id = $1', [body.id]);
+  assert.equal(
+    new Date(stored.rows[0].timestamp).getTime(),
+    new Date(deviceTime).getTime(),
+    'the persisted timestamp must be the device time, not the server arrival time'
+  );
+});
+
+test('POST /api/mobile/checadas with an empty embedding array returns 400, not 500', async () => {
+  // FaceCaptureCamera degrades to `embedding: []` when on-device extraction
+  // fails — a real device condition, not an attack. It must not reach
+  // cosineSimilarity (length mismatch -> uncaught throw -> 500).
+  const res = await asEmpleado('/api/mobile/checadas', {
+    method: 'POST',
+    body: JSON.stringify(checadaPayload({ embedding: [] })),
+  });
+  const body = await res.json();
+  assert.equal(res.status, 400);
+  assert.equal(body.error, 'tipo, embedding, lat, lng required');
+});
+
+test('a checada flagged enviado_diferido accepts a timestamp older than the normal drift window', async () => {
+  // A checada captured offline and flushed hours later by the mobile queue.
+  const staleTimestamp = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(); // 3h ago
+
+  // Same timestamp WITHOUT the flag: still rejected (the normal anti-replay
+  // / clock-integrity check of spec §5 must not be weakened).
+  const rejected = await asEmpleado('/api/mobile/checadas', {
+    method: 'POST',
+    body: JSON.stringify(checadaPayload({ timestamp_dispositivo: staleTimestamp })),
+  });
+  assert.equal(rejected.status, 422);
+
+  // With the flag: accepted, and recorded at its capture time.
+  const accepted = await asEmpleado('/api/mobile/checadas', {
+    method: 'POST',
+    body: JSON.stringify(checadaPayload({ timestamp_dispositivo: staleTimestamp, enviado_diferido: true })),
+  });
+  const body = await accepted.json();
+  assert.equal(accepted.status, 201);
+  assert.equal(new Date(body.timestamp).getTime(), new Date(staleTimestamp).getTime());
+});
+
+test('enviado_diferido still rejects a timestamp beyond the wider offline window', async () => {
+  const ancient = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(); // 48h ago, default offline window is 24h
+  const res = await asEmpleado('/api/mobile/checadas', {
+    method: 'POST',
+    body: JSON.stringify(checadaPayload({ timestamp_dispositivo: ancient, enviado_diferido: true })),
+  });
+  assert.equal(res.status, 422);
+});
+
+test('a geofence rejection writes an audit_log row', async () => {
+  await pool.query(`DELETE FROM audit_log WHERE accion = 'checada_rechazada_geocerca'`);
+  const res = await asEmpleado('/api/mobile/checadas', {
+    method: 'POST',
+    body: JSON.stringify(checadaPayload({ lat: 20.9, lng: -103.9 })),
+  });
+  assert.equal(res.status, 422);
+
+  const rows = await pool.query(
+    `SELECT detalle FROM audit_log WHERE accion = 'checada_rechazada_geocerca'`
+  );
+  assert.equal(rows.rows.length, 1);
+  assert.match(rows.rows[0].detalle, new RegExp(`^empleado_id=${empleadoId} `));
+});
+
+test('a timestamp-drift rejection writes an audit_log row', async () => {
+  await pool.query(`DELETE FROM audit_log WHERE accion = 'checada_rechazada_timestamp'`);
+  const staleTimestamp = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1h ago
+  const res = await asEmpleado('/api/mobile/checadas', {
+    method: 'POST',
+    body: JSON.stringify(checadaPayload({ timestamp_dispositivo: staleTimestamp })),
+  });
+  assert.equal(res.status, 422);
+
+  const rows = await pool.query(
+    `SELECT detalle FROM audit_log WHERE accion = 'checada_rechazada_timestamp'`
+  );
+  assert.equal(rows.rows.length, 1);
+  assert.match(rows.rows[0].detalle, new RegExp(`^empleado_id=${empleadoId} `));
+  assert.match(rows.rows[0].detalle, /diferido=false/);
+});
+
+test('geofence and timestamp rejections do not count toward the repeated-match-failure alert', async () => {
+  // They use their own audit actions, so they must not pollute the
+  // biometric failure streak (which only tracks checada_rechazada_match).
+  const sede = await pool.query(
+    `INSERT INTO sedes (nombre, lat, lng, radio_metros) VALUES ('Planta NoAlerta', 20.6736, -103.344, 100) RETURNING id`
+  );
+  const empleado = await pool.query(
+    `INSERT INTO empleados (nombre, codigo_noi, sede_id, estado) VALUES ('NoAlerta Test', 'E935', $1, 'activo') RETURNING id`,
+    [sede.rows[0].id]
+  );
+  const id = empleado.rows[0].id;
+  const tok = jwt.sign({ empleado_id: id, role: 'empleado' }, process.env.JWT_SECRET);
+  await pool.query(
+    `INSERT INTO enrolamientos_biometricos (empleado_id, tipo, embedding_cifrado, fecha_expiracion_retencion, estado)
+     VALUES ($1, 'rostro', $2, now() + interval '5 years', 'aprobado')`,
+    [id, encryptEmbedding(KNOWN_EMBEDDING)]
+  );
+
+  for (let i = 0; i < 3; i++) {
+    const res = await fetch(`${baseUrl}/api/mobile/checadas`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(checadaPayload({ lat: 20.9, lng: -103.9 })),
+    });
+    assert.equal(res.status, 422);
+  }
+
+  const alertRows = await pool.query(
+    `SELECT * FROM audit_log WHERE accion = 'alerta_rh_fallos_repetidos' AND detalle = $1`,
+    [`empleado_id=${id}`]
+  );
+  assert.equal(alertRows.rows.length, 0);
+});
+
 test.after(async () => {
   server.close();
   await pool.end();

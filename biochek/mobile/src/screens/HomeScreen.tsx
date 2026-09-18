@@ -29,6 +29,11 @@ export function HomeScreen() {
     const interval = setInterval(async () => {
       const flushed = await flushQueue();
       setPendingCount(flushed.remaining);
+      if (flushed.droppedCount > 0) {
+        setStatus(
+          `${flushed.droppedCount} checada(s) pendiente(s) fueron rechazadas por el servidor y se descartaron. Avisa a RH.`
+        );
+      }
       if (flushed.sentAny) loadHistory();
     }, 20000);
     return () => clearInterval(interval);
@@ -41,10 +46,19 @@ export function HomeScreen() {
       return;
     }
 
-    const enrolledEmbedding = await getEnrolledEmbedding();
-    if (enrolledEmbedding && !isMatch(result.embedding, enrolledEmbedding)) {
-      setStatus('No coincide tu rostro — inténtalo de nuevo.');
-      return; // instant local feedback, no network round trip; backend still re-checks on submit
+    // The local match is only an instant-feedback optimization — the backend
+    // re-checks and is the source of truth. If reading the cached embedding
+    // or comparing it fails (corrupted/absent cache, empty embedding from a
+    // failed on-device extraction), fall through to the backend instead of
+    // throwing out of this handler.
+    try {
+      const enrolledEmbedding = await getEnrolledEmbedding();
+      if (enrolledEmbedding && !isMatch(result.embedding, enrolledEmbedding)) {
+        setStatus('No coincide tu rostro — inténtalo de nuevo.');
+        return; // instant local feedback, no network round trip; backend still re-checks on submit
+      }
+    } catch (err) {
+      console.warn('BioChek: no se pudo verificar el rostro localmente', err);
     }
 
     setStatus('Verificando...');
