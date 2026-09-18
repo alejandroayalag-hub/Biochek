@@ -1,14 +1,16 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Button, StyleSheet } from 'react-native';
 import { useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
 import { Camera } from 'react-native-vision-camera-face-detector';
 import type { Face } from 'react-native-vision-camera-face-detector';
 import { evaluateLiveness, type EyeOpenSample } from '../lib/liveness';
+import { extractEmbedding, loadFaceModel } from '../lib/embedding';
 
 export type CaptureResult = {
   photoBase64: string;
   faceDetected: boolean;
   liveness: boolean;
+  embedding: number[];
 };
 
 type Props = {
@@ -33,6 +35,12 @@ export function FaceCaptureCamera({ instruction, onCapture }: Props) {
   const photoOutput = usePhotoOutput();
   const samples = useRef<EyeOpenSample[]>([]);
   const [faceDetected, setFaceDetected] = useState(false);
+
+  useEffect(() => {
+    loadFaceModel().catch((error) => {
+      console.warn('BioChek: failed to load face embedding model', error);
+    });
+  }, []);
 
   const pushSample = useCallback((sample: EyeOpenSample, detected: boolean) => {
     samples.current = [...samples.current, sample].slice(-SAMPLE_WINDOW_SIZE);
@@ -66,7 +74,13 @@ export function FaceCaptureCamera({ instruction, onCapture }: Props) {
   async function handleCapture() {
     const photoFile = await photoOutput.capturePhotoToFile({}, {});
     const liveness = evaluateLiveness(samples.current);
-    onCapture({ photoBase64: photoFile.filePath, faceDetected, liveness });
+    let embedding: number[] = [];
+    try {
+      embedding = await extractEmbedding(photoFile.filePath);
+    } catch (error) {
+      console.warn('BioChek: failed to extract face embedding', error);
+    }
+    onCapture({ photoBase64: photoFile.filePath, faceDetected, liveness, embedding });
   }
 
   if (!hasPermission) {
