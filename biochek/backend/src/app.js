@@ -6,6 +6,7 @@ import empleadosRouter from './routes/empleados.js';
 import checadasRouter from './routes/checadas.js';
 import mobileRouter from './routes/mobile.js';
 import enrolamientosRouter from './routes/enrolamientos.js';
+import exportacionesNoiRouter from './routes/exportacionesNoi.js';
 
 export function createApp() {
   const app = express();
@@ -22,6 +23,7 @@ export function createApp() {
   app.use('/api/checadas', checadasRouter);
   app.use('/api/mobile', mobileRouter);
   app.use('/api/enrolamientos', enrolamientosRouter);
+  app.use('/api/exportaciones-noi', exportacionesNoiRouter);
 
   app.use((err, req, res, next) => {
     console.error(err);
