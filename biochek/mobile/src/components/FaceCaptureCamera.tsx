@@ -3,6 +3,7 @@ import { View, Text, Button, StyleSheet } from 'react-native';
 import { useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
 import { Camera } from 'react-native-vision-camera-face-detector';
 import type { Face } from 'react-native-vision-camera-face-detector';
+import { File } from 'expo-file-system';
 import { evaluateLiveness, type EyeOpenSample } from '../lib/liveness';
 import { extractEmbedding, loadFaceModel } from '../lib/embedding';
 
@@ -80,7 +81,11 @@ export function FaceCaptureCamera({ instruction, onCapture }: Props) {
     } catch (error) {
       console.warn('BioChek: failed to extract face embedding', error);
     }
-    onCapture({ photoBase64: photoFile.filePath, faceDetected, liveness, embedding });
+    // photoFile.filePath is a local file:// URI, not base64 data — read and
+    // base64-encode the actual JPEG bytes so CaptureResult.photoBase64 holds
+    // what its name promises (the backend base64-decodes this field as-is).
+    const photoBase64 = await new File(photoFile.filePath).base64();
+    onCapture({ photoBase64, faceDetected, liveness, embedding });
   }
 
   if (!hasPermission) {
