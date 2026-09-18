@@ -17,7 +17,8 @@ export function getUser() {
   const token = getToken();
   if (!token) return null;
   try {
-    return JSON.parse(atob(token.split('.')[1]));
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(payload));
   } catch {
     return null;
   }
