@@ -1,6 +1,7 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text } from 'react-native';
+import { LoginScreen } from '../screens/LoginScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -23,7 +24,9 @@ export function RootNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login">
-        <Stack.Screen name="Login" children={() => <PlaceholderScreen name="Login" />} />
+        <Stack.Screen name="Login" children={({ navigation }) => (
+          <LoginScreen onLoggedIn={() => navigation.replace('EnrollmentPending')} />
+        )} />
         <Stack.Screen name="EnrollmentWizard" children={() => <PlaceholderScreen name="EnrollmentWizard" />} />
         <Stack.Screen name="EnrollmentPending" children={() => <PlaceholderScreen name="EnrollmentPending" />} />
         <Stack.Screen name="Home" children={() => <PlaceholderScreen name="Home" />} />
