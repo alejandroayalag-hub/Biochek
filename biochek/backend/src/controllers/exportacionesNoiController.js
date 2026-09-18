@@ -12,7 +12,8 @@ export async function createExportacion(req, res, next) {
     const result = await pool.query(
       `SELECT c.timestamp, e.codigo_noi, c.tipo
        FROM checadas c JOIN empleados e ON e.id = c.empleado_id
-       WHERE c.timestamp >= $1 AND c.timestamp <= $2
+       WHERE c.timestamp >= ($1::date::timestamp AT TIME ZONE 'America/Mexico_City')
+         AND c.timestamp <  (($2::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City')
        ORDER BY c.timestamp ASC`,
       [desde, hasta]
     );
@@ -22,7 +23,9 @@ export async function createExportacion(req, res, next) {
 
     const insert = await pool.query(
       `INSERT INTO exportaciones_noi (desde, hasta, archivo, disparado_por)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, to_char(desde, 'YYYY-MM-DD') AS desde, to_char(hasta, 'YYYY-MM-DD') AS hasta,
+                 archivo, disparado_por, created_at`,
       [desde, hasta, archivo, req.user.id]
     );
 
@@ -35,7 +38,8 @@ export async function createExportacion(req, res, next) {
 export async function listExportaciones(req, res, next) {
   try {
     const result = await pool.query(
-      `SELECT en.*, u.email AS disparado_por_email
+      `SELECT en.id, to_char(en.desde, 'YYYY-MM-DD') AS desde, to_char(en.hasta, 'YYYY-MM-DD') AS hasta,
+              en.archivo, en.disparado_por, en.created_at, u.email AS disparado_por_email
        FROM exportaciones_noi en
        LEFT JOIN usuarios u ON u.id = en.disparado_por
        ORDER BY en.created_at DESC`

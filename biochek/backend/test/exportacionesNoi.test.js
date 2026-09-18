@@ -82,6 +82,11 @@ test('POST /api/exportaciones-noi generates a CSV and records it for admin', asy
   assert.equal(res.status, 201);
   assert.equal(body.disparado_por, 40);
   assert.ok(body.id);
+  // Finding 2 regression: desde/hasta must be plain YYYY-MM-DD strings, not
+  // full ISO datetimes (node-pg's date parser + res.json() otherwise turns
+  // DATE columns into e.g. "2026-09-18T06:00:00.000Z").
+  assert.equal(body.desde, '2026-09-18');
+  assert.equal(body.hasta, '2026-09-19');
   exportacionId = body.id;
 });
 
@@ -90,6 +95,18 @@ test('GET /api/exportaciones-noi is visible to rh (read-only)', async () => {
   const body = await res.json();
   assert.equal(res.status, 200);
   assert.ok(body.some((e) => e.id === exportacionId));
+});
+
+test('GET /api/exportaciones-noi returns desde/hasta as plain YYYY-MM-DD dates (Finding 2 regression)', async () => {
+  const res = await as(adminToken, '/api/exportaciones-noi');
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  const entry = body.find((e) => e.id === exportacionId);
+  assert.ok(entry);
+  assert.match(entry.desde, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(entry.hasta, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(entry.desde.length, 10);
+  assert.equal(entry.hasta.length, 10);
 });
 
 test('GET /api/exportaciones-noi/:id/descargar returns the generated CSV content', async () => {
@@ -104,6 +121,32 @@ test('GET /api/exportaciones-noi/:id/descargar returns the generated CSV content
 test('GET /api/exportaciones-noi/:id/descargar returns 404 for an unknown id', async () => {
   const res = await as(adminToken, '/api/exportaciones-noi/999999/descargar');
   assert.equal(res.status, 404);
+});
+
+test('POST /api/exportaciones-noi includes a Mexico-City-evening checada that falls on the next UTC calendar day (Finding 1 regression)', async () => {
+  // 2026-09-20T02:00:00Z is 2026-09-19T20:00 in America/Mexico_City (UTC-6):
+  // squarely inside a desde=hasta='2026-09-19' request, but on the *next*
+  // UTC calendar day. The old `c.timestamp <= $2` (bare date cast to UTC
+  // midnight) logic would have excluded it.
+  await pool.query(
+    `INSERT INTO checadas (empleado_id, tipo, origen, timestamp) VALUES ($1, 'entrada', 'app', '2026-09-20T02:00:00Z')`,
+    [empleadoId]
+  );
+
+  const res = await as(adminToken, '/api/exportaciones-noi', {
+    method: 'POST',
+    body: JSON.stringify({ desde: '2026-09-19', hasta: '2026-09-19' }),
+  });
+  const body = await res.json();
+  assert.equal(res.status, 201);
+
+  const download = await as(adminToken, `/api/exportaciones-noi/${body.id}/descargar`);
+  const csv = await download.text();
+
+  // Exact CSV body assertion (not just .includes) so the UTC -> Mexico City
+  // conversion is verified end-to-end through the real DB -> controller -> CSV
+  // path, not just noiExportFormat's unit test with string literals.
+  assert.equal(csv, '"codigo_noi","fecha","hora","tipo"\n"E940","2026-09-19","20:00","entrada"');
 });
 
 test.after(async () => {

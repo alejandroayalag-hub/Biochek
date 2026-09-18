@@ -35,13 +35,18 @@ export default function ExportacionesNoiPage() {
   }
 
   async function handleDescargar(id) {
-    const res = await api.get(`/exportaciones-noi/${id}/descargar`, { responseType: 'blob' });
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `exportacion-noi-${id}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setError('');
+    try {
+      const res = await api.get(`/exportaciones-noi/${id}/descargar`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `exportacion-noi-${id}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al descargar la exportación');
+    }
   }
 
   return (
