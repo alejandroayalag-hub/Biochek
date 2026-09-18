@@ -4,7 +4,7 @@ import { requireRole } from '../middleware/requireRole.js';
 import { listEmpleados, createEmpleado, updateEmpleado, deleteEmpleado, resetPin } from '../controllers/empleadosController.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireRole('admin', 'rh'));
 router.get('/', listEmpleados);
 router.post('/', requireRole('admin'), createEmpleado);
 router.put('/:id', requireRole('admin'), updateEmpleado);

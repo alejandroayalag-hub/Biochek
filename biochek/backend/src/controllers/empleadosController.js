@@ -2,10 +2,20 @@ import { pool } from '../db/pool.js';
 import { hashPassword } from '../utils/password.js';
 import { generatePin } from '../utils/pin.js';
 
+/**
+ * Strips `pin_hash` from an empleado row before it goes out over the wire.
+ * The PIN is 6 digits, so its bcrypt hash is trivially brute-forceable
+ * offline by anyone who ever sees it — it must never leave the server.
+ */
+function withoutPinHash(row) {
+  const { pin_hash, ...empleado } = row;
+  return empleado;
+}
+
 export async function listEmpleados(req, res, next) {
   try {
     const result = await pool.query('SELECT * FROM empleados ORDER BY nombre');
-    res.json(result.rows);
+    res.json(result.rows.map(withoutPinHash));
   } catch (err) {
     next(err);
   }
@@ -24,8 +34,7 @@ export async function createEmpleado(req, res, next) {
        VALUES ($1, $2, $3, 'activo', $4) RETURNING *`,
       [nombre, codigo_noi, sede_id, pinHash]
     );
-    const { pin_hash, ...empleado } = result.rows[0];
-    res.status(201).json({ ...empleado, pin });
+    res.status(201).json({ ...withoutPinHash(result.rows[0]), pin });
   } catch (err) {
     next(err);
   }
@@ -41,7 +50,7 @@ export async function updateEmpleado(req, res, next) {
       [nombre, codigo_noi, sede_id, estado, id]
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'not found' });
-    res.json(result.rows[0]);
+    res.json(withoutPinHash(result.rows[0]));
   } catch (err) {
     next(err);
   }

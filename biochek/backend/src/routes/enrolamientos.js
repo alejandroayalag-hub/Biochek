@@ -5,7 +5,7 @@ import { listEnrolamientos, aprobarEnrolamiento, rechazarEnrolamiento } from '..
 
 const router = Router();
 router.use(requireAuth);
-router.get('/', listEnrolamientos);
+router.get('/', requireRole('admin', 'rh'), listEnrolamientos);
 router.post('/:id/aprobar', requireRole('admin'), aprobarEnrolamiento);
 router.post('/:id/rechazar', requireRole('admin'), rechazarEnrolamiento);
 
