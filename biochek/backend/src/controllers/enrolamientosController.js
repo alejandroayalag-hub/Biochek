@@ -1,4 +1,5 @@
 import { pool } from '../db/pool.js';
+import { readEncryptedFile } from '../utils/fileStorage.js';
 
 export async function listEnrolamientos(req, res, next) {
   try {
@@ -43,3 +44,25 @@ async function setEstado(req, res, next, estado) {
 
 export const aprobarEnrolamiento = (req, res, next) => setEstado(req, res, next, 'aprobado');
 export const rechazarEnrolamiento = (req, res, next) => setEstado(req, res, next, 'rechazado');
+
+export async function getFotoEnrolamiento(req, res, next) {
+  try {
+    const { id, index } = req.params;
+    const result = await pool.query(
+      'SELECT foto_urls FROM enrolamientos_biometricos WHERE id = $1',
+      [id]
+    );
+    const relativePath = result.rows[0]?.foto_urls?.[Number(index)];
+    if (!relativePath) return res.status(404).json({ error: 'not found' });
+
+    const bytes = readEncryptedFile(relativePath);
+    await pool.query(
+      `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES ($1, $2, $3)`,
+      [req.user.id, 'ver_foto_enrolamiento', `enrolamiento_id=${id}, index=${index}`]
+    );
+    res.set('Content-Type', 'image/jpeg');
+    res.send(bytes);
+  } catch (err) {
+    next(err);
+  }
+}
