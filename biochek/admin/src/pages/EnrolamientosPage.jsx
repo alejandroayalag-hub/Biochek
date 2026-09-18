@@ -18,13 +18,18 @@ export default function EnrolamientosPage() {
   useEffect(() => { load(); }, [estadoFiltro]);
 
   async function verFotos(enrolamiento) {
-    const urls = await Promise.all(
-      (enrolamiento.foto_urls || []).map(async (_, index) => {
-        const res = await api.get(`/enrolamientos/${enrolamiento.id}/foto/${index}`, { responseType: 'blob' });
-        return URL.createObjectURL(res.data);
-      })
-    );
-    setFotos({ enrolamientoId: enrolamiento.id, urls });
+    setError('');
+    try {
+      const urls = await Promise.all(
+        (enrolamiento.foto_urls || []).map(async (_, index) => {
+          const res = await api.get(`/enrolamientos/${enrolamiento.id}/foto/${index}`, { responseType: 'blob' });
+          return URL.createObjectURL(res.data);
+        })
+      );
+      setFotos({ enrolamientoId: enrolamiento.id, urls });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al cargar las fotos');
+    }
   }
 
   function cerrarFotos() {
