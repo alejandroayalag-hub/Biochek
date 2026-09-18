@@ -8,7 +8,7 @@ import SedesPage from './pages/SedesPage';
 import EnrolamientosPage from './pages/EnrolamientosPage';
 import ReportesPage from './pages/ReportesPage';
 import DispositivosStubPage from './pages/DispositivosStubPage';
-import ExportNoiStubPage from './pages/ExportNoiStubPage';
+import ExportacionesNoiPage from './pages/ExportacionesNoiPage';
 
 export default function App() {
   return (
@@ -29,7 +29,7 @@ export default function App() {
           <Route path="enrolamientos" element={<EnrolamientosPage />} />
           <Route path="reportes" element={<ReportesPage />} />
           <Route path="dispositivos" element={<DispositivosStubPage />} />
-          <Route path="exportacion-noi" element={<ExportNoiStubPage />} />
+          <Route path="exportacion-noi" element={<ExportacionesNoiPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
