@@ -10,9 +10,9 @@ const REQUIRED_SHOTS = [
   'Gira ligeramente tu rostro a la derecha',
 ];
 
-type Props = { onSubmitted: () => void };
+type Props = { avisoVersion: string; onSubmitted: () => void };
 
-export function EnrollmentWizardScreen({ onSubmitted }: Props) {
+export function EnrollmentWizardScreen({ avisoVersion, onSubmitted }: Props) {
   const [shotIndex, setShotIndex] = useState(0);
   const [captures, setCaptures] = useState<CaptureResult[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function EnrollmentWizardScreen({ onSubmitted }: Props) {
         {
           embedding: allCaptures[0].embedding,
           fotos_base64: allCaptures.map(c => c.photoBase64),
-          aviso_privacidad_aceptado: true,
+          aviso_privacidad_version: avisoVersion,
         },
         token ?? undefined
       );

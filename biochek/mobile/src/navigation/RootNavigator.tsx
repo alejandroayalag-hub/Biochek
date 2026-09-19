@@ -2,6 +2,7 @@ import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { LoginScreen } from '../screens/LoginScreen';
+import { PrivacyConsentScreen } from '../screens/PrivacyConsentScreen';
 import { EnrollmentWizardScreen } from '../screens/EnrollmentWizardScreen';
 import { EnrollmentPendingScreen } from '../screens/EnrollmentPendingScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -10,7 +11,8 @@ import { getToken } from '../auth/session';
 
 export type RootStackParamList = {
   Login: undefined;
-  EnrollmentWizard: undefined;
+  PrivacyConsent: undefined;
+  EnrollmentWizard: { avisoVersion: string };
   EnrollmentPending: undefined;
   Home: undefined;
 };
@@ -35,7 +37,7 @@ export function RootNavigator() {
                 token ?? undefined
               );
               if (estado === 'aprobado') navigation.replace('Home');
-              else if (estado === null) navigation.replace('EnrollmentWizard');
+              else if (estado === null) navigation.replace('PrivacyConsent');
               else navigation.replace('EnrollmentPending');
             } catch (err) {
               console.warn('BioChek: no se pudo consultar el estado de enrolamiento', err);
@@ -46,8 +48,14 @@ export function RootNavigator() {
             }
           }} />
         )} />
-        <Stack.Screen name="EnrollmentWizard" children={({ navigation }) => (
-          <EnrollmentWizardScreen onSubmitted={() => navigation.replace('EnrollmentPending')} />
+        <Stack.Screen name="PrivacyConsent" children={({ navigation }) => (
+          <PrivacyConsentScreen onAccepted={(avisoVersion) => navigation.replace('EnrollmentWizard', { avisoVersion })} />
+        )} />
+        <Stack.Screen name="EnrollmentWizard" children={({ navigation, route }) => (
+          <EnrollmentWizardScreen
+            avisoVersion={route.params.avisoVersion}
+            onSubmitted={() => navigation.replace('EnrollmentPending')}
+          />
         )} />
         <Stack.Screen name="EnrollmentPending" children={({ navigation }) => (
           <EnrollmentPendingScreen onApproved={() => navigation.replace('Home')} />
