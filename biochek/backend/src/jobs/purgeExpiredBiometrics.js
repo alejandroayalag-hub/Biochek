@@ -20,17 +20,26 @@ export async function purgeExpiredBiometrics(pool) {
       }
     }
 
-    await pool.query(
-      `UPDATE enrolamientos_biometricos
-       SET embedding_cifrado = NULL, foto_urls = '{}', anonimizado_at = now()
-       WHERE id = $1`,
-      [row.id]
-    );
-
-    await pool.query(
-      `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES (NULL, $1, $2)`,
-      ['purga_automatica', `enrolamiento_id=${row.id}`]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE enrolamientos_biometricos
+         SET embedding_cifrado = NULL, foto_urls = '{}', anonimizado_at = now()
+         WHERE id = $1`,
+        [row.id]
+      );
+      await client.query(
+        `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES (NULL, $1, $2)`,
+        ['purga_automatica', `enrolamiento_id=${row.id}`]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   return { purgados: expired.rows.length };
