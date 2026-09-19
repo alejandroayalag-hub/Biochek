@@ -49,7 +49,7 @@ test('POST /api/mobile/enrolamientos creates a pendiente enrollment', async () =
     body: JSON.stringify({
       embedding: Array(128).fill(0.1),
       fotos_base64: [fotoBase64, fotoBase64],
-      aviso_privacidad_aceptado: true,
+      aviso_privacidad_version: 'v1-placeholder',
     }),
   });
   const body = await res.json();
@@ -58,7 +58,7 @@ test('POST /api/mobile/enrolamientos creates a pendiente enrollment', async () =
   assert.equal(body.estado, 'pendiente');
 
   const row = await pool.query(
-    `SELECT estado, foto_urls, embedding_cifrado, aviso_privacidad_aceptado_at
+    `SELECT estado, foto_urls, embedding_cifrado, aviso_privacidad_aceptado_at, aviso_privacidad_version
      FROM enrolamientos_biometricos WHERE empleado_id = $1`,
     [empleadoId]
   );
@@ -66,12 +66,21 @@ test('POST /api/mobile/enrolamientos creates a pendiente enrollment', async () =
   assert.equal(row.rows[0].foto_urls.length, 2);
   assert.ok(row.rows[0].embedding_cifrado);
   assert.ok(row.rows[0].aviso_privacidad_aceptado_at);
+  assert.equal(row.rows[0].aviso_privacidad_version, 'v1-placeholder');
 });
 
-test('POST /api/mobile/enrolamientos without accepting the privacy notice returns 400', async () => {
+test('POST /api/mobile/enrolamientos without aviso_privacidad_version returns 400', async () => {
   const res = await asEmpleado('/api/mobile/enrolamientos', {
     method: 'POST',
-    body: JSON.stringify({ embedding: [0.1], fotos_base64: [], aviso_privacidad_aceptado: false }),
+    body: JSON.stringify({ embedding: [0.1], fotos_base64: [] }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('POST /api/mobile/enrolamientos with an outdated aviso_privacidad_version returns 400', async () => {
+  const res = await asEmpleado('/api/mobile/enrolamientos', {
+    method: 'POST',
+    body: JSON.stringify({ embedding: [0.1], fotos_base64: [], aviso_privacidad_version: 'v0-old' }),
   });
   assert.equal(res.status, 400);
 });
