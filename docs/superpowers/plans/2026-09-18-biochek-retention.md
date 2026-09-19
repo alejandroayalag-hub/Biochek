@@ -19,7 +19,7 @@
 - `audit_log` gets writes for NOI export generation and download (spec §2.4) — but **not** for `listEnrolamientos` (roster listing, no images returned). Do not add an audit write there.
 - Backend test command: `npm test` (`node --test --test-concurrency=1 test/`) from `biochek/backend/`. Requires the Postgres container on port 5442 running and `.env` present (with `BIOMETRIC_ENCRYPTION_KEY` and `JWT_SECRET` already set from Plan 3).
 - Migrations apply via `npm run migrate` from `biochek/backend/` (auto-runs any new file under `src/db/migrations/` not yet in the `_migrations` table) — never apply migration SQL by hand with `psql`.
-- Mobile check: `npx tsc --noEmit` from `biochek/mobile/`. No new Jest tests for UI screens — Plan 3 established Jest only for pure-logic modules (liveness, session, offlineQueue, embedding); `PrivacyConsentScreen` and the wizard wiring change are verified by type-check + manual check on the dev client, per spec §4.
+- Mobile check: `npx tsc --noEmit 2>&1 | grep -v '__tests__'` from `biochek/mobile/` (bare `npx tsc --noEmit` already reports ~70 pre-existing errors confined to `__tests__/`, unrelated to this plan — filtering isolates real regressions). No new Jest tests for UI screens — Plan 3 established Jest only for pure-logic modules (liveness, session, offlineQueue, embedding); `PrivacyConsentScreen` and the wizard wiring change are verified by type-check + manual check on the dev client, per spec §4.
 
 ---
 
@@ -850,8 +850,8 @@ export function RootNavigator() {
 
 - [ ] **Step 4: Type-check**
 
-Run (from `biochek/mobile/`): `npx tsc --noEmit`
-Expected: no errors.
+Run (from `biochek/mobile/`): `npx tsc --noEmit 2>&1 | grep -v '__tests__'`
+Expected: no output. (Baseline `npx tsc --noEmit` alone already reports ~70 pre-existing errors confined to `__tests__/` — missing `@types/jest`, unrelated to this task — so the bare command is not a usable gate. Filtering `__tests__` out isolates errors in the files this task actually touches.)
 
 - [ ] **Step 5: Manual check**
 
