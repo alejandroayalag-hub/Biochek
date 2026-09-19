@@ -7,6 +7,7 @@ import checadasRouter from './routes/checadas.js';
 import mobileRouter from './routes/mobile.js';
 import enrolamientosRouter from './routes/enrolamientos.js';
 import exportacionesNoiRouter from './routes/exportacionesNoi.js';
+import avisoPrivacidadRouter from './routes/avisoPrivacidad.js';
 
 export function createApp() {
   const app = express();
@@ -16,6 +17,7 @@ export function createApp() {
     res.json({ status: 'ok' });
   });
 
+  app.use('/api/aviso-privacidad', avisoPrivacidadRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/auth/empleado', authEmpleadoRouter);
   app.use('/api/sedes', sedesRouter);
