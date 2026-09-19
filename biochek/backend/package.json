@@ -6,7 +6,8 @@
     "start": "node src/index.js",
     "migrate": "node src/db/migrate.js",
     "test": "node --test --test-concurrency=1 test/",
-    "seed": "node src/db/seedAdmin.js"
+    "seed": "node src/db/seedAdmin.js",
+    "purge": "node scripts/purge-biometrics.js"
   },
   "dependencies": {
     "express": "^4.19.2",
