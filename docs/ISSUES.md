@@ -36,3 +36,28 @@ drifting apart (currently also duplicated as `NOI_TIMEZONE` in
 in the DB, just excluded from a filtered view), but payroll-adjacent
 numbers not matching between two screens is a real trust problem once
 someone notices.
+
+### Consent checkbox on `PrivacyConsentScreen` has no accessibility semantics
+
+**Found:** 2026-09-18, during final review of Plan 6 (retención y seguridad).
+**File:** `biochek/mobile/src/screens/PrivacyConsentScreen.tsx` (the checkbox `View`/`Pressable`, ~line 57-60)
+
+**Bug:** the consent checkbox is a bare `View` inside a `Pressable`, with no
+`accessibilityRole="checkbox"` or `accessibilityState={{ checked }}`. A
+screen-reader user gets no indication it's a checkbox, or of its current
+checked/unchecked state.
+
+**Why this one matters more than a typical a11y gap:** this control is the
+actual informed-consent mechanism for enrolling biometric data (LFPDPPP) —
+the entire point of Plan 6 was making consent real instead of a rubber-stamped
+boolean. A screen-reader user who can't perceive the checkbox's state can't
+meaningfully give that consent, even though the feature "works" for a sighted
+user.
+
+**Fix:** add `accessibilityRole="checkbox"` and `accessibilityState={{ checked }}`
+to the `Pressable` at `PrivacyConsentScreen.tsx:57`.
+
+**Severity:** Important (compliance-adjacent), not Critical — the feature
+functions correctly for the common case, but this is a real accessibility/
+consent gap, not polish. Flagged by the final-review reviewer as "escalate
+soonest after merge."
