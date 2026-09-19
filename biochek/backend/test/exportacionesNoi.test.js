@@ -87,7 +87,22 @@ test('POST /api/exportaciones-noi generates a CSV and records it for admin', asy
   // DATE columns into e.g. "2026-09-18T06:00:00.000Z").
   assert.equal(body.desde, '2026-09-18');
   assert.equal(body.hasta, '2026-09-19');
+  // Finding 2 regression: response must report how many checadas were exported.
+  assert.equal(body.total, 2);
   exportacionId = body.id;
+});
+
+test('POST /api/exportaciones-noi with a malformed desde returns 400 (Finding 1 regression)', async () => {
+  const res = await as(adminToken, '/api/exportaciones-noi', {
+    method: 'POST',
+    body: JSON.stringify({ desde: 'no-soy-fecha', hasta: '2026-09-19' }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test('GET /api/exportaciones-noi/abc/descargar returns 404 for a non-numeric id (Finding 1 regression)', async () => {
+  const res = await as(adminToken, '/api/exportaciones-noi/abc/descargar');
+  assert.equal(res.status, 404);
 });
 
 test('GET /api/exportaciones-noi is visible to rh (read-only)', async () => {

@@ -7,6 +7,7 @@ export default function ExportacionesNoiPage() {
   const [exportaciones, setExportaciones] = useState([]);
   const [filtros, setFiltros] = useState({ desde: '', hasta: '' });
   const [error, setError] = useState('');
+  const [mensaje, setMensaje] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function load() {
@@ -19,13 +20,15 @@ export default function ExportacionesNoiPage() {
   async function handleGenerar(e) {
     e.preventDefault();
     setError('');
+    setMensaje('');
     if (!filtros.desde || !filtros.hasta) {
       setError('Selecciona un rango de fechas');
       return;
     }
     setLoading(true);
     try {
-      await api.post('/exportaciones-noi', filtros);
+      const { data } = await api.post('/exportaciones-noi', filtros);
+      setMensaje(`Exportación generada: ${data.total} checadas`);
       await load();
     } catch (err) {
       setError(err.response?.data?.error || 'Error al generar la exportación');
@@ -36,6 +39,7 @@ export default function ExportacionesNoiPage() {
 
   async function handleDescargar(id) {
     setError('');
+    setMensaje('');
     try {
       const res = await api.get(`/exportaciones-noi/${id}/descargar`, { responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
@@ -69,6 +73,7 @@ export default function ExportacionesNoiPage() {
         </form>
       )}
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+      {mensaje && <p className="text-green-600 text-sm mb-4">{mensaje}</p>}
 
       <table className="w-full bg-white rounded-lg border border-gray-200 text-sm">
         <thead>

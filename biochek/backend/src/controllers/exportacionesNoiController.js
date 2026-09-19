@@ -8,6 +8,10 @@ export async function createExportacion(req, res, next) {
     if (!desde || !hasta) {
       return res.status(400).json({ error: 'desde and hasta required' });
     }
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    if (!DATE_RE.test(desde) || !DATE_RE.test(hasta)) {
+      return res.status(400).json({ error: 'desde and hasta must be YYYY-MM-DD' });
+    }
 
     const result = await pool.query(
       `SELECT c.timestamp, e.codigo_noi, c.tipo
@@ -29,7 +33,7 @@ export async function createExportacion(req, res, next) {
       [desde, hasta, archivo, req.user.id]
     );
 
-    res.status(201).json(insert.rows[0]);
+    res.status(201).json({ ...insert.rows[0], total: result.rows.length });
   } catch (err) {
     next(err);
   }
@@ -53,6 +57,8 @@ export async function listExportaciones(req, res, next) {
 export async function descargarExportacion(req, res, next) {
   try {
     const { id } = req.params;
+    if (!/^\d+$/.test(id)) return res.status(404).json({ error: 'not found' });
+
     const result = await pool.query('SELECT archivo FROM exportaciones_noi WHERE id = $1', [id]);
     const row = result.rows[0];
     if (!row) return res.status(404).json({ error: 'not found' });
