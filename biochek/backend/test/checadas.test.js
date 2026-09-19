@@ -98,6 +98,27 @@ test('GET /api/checadas?empleado_id= lists only that empleado\'s checadas', asyn
   assert.ok(body.length >= 1);
 });
 
+test('GET /api/checadas?desde=&hasta= includes a checada from the Mexico City evening, not UTC midnight', async () => {
+  // 2026-09-20T02:00:00Z is 2026-09-19 20:00 Mexico City (UTC-6) — a plain
+  // UTC comparison of the 'hasta' bound against '2026-09-19' would exclude
+  // this row; the Mexico City day bound must include it.
+  await pool.query(
+    `INSERT INTO checadas (empleado_id, tipo, origen, timestamp) VALUES ($1, 'entrada', 'app', '2026-09-20T02:00:00Z')`,
+    [empleadoId]
+  );
+
+  const res = await authed(`/api/checadas?empleado_id=${empleadoId}&desde=2026-09-19&hasta=2026-09-19`);
+  const body = await res.json();
+
+  assert.equal(res.status, 200);
+  assert.ok(body.some(c => new Date(c.timestamp).toISOString() === '2026-09-20T02:00:00.000Z'));
+});
+
+test('GET /api/checadas?desde=bad-date returns 400', async () => {
+  const res = await authed(`/api/checadas?desde=not-a-date`);
+  assert.equal(res.status, 400);
+});
+
 test.after(async () => {
   server.close();
   await pool.end();

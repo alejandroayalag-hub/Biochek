@@ -1,5 +1,8 @@
 import { pool } from '../db/pool.js';
 import { isWithinGeofence } from '../utils/geofence.js';
+import { mexicoCityDayStartExpr, mexicoCityDayEndExclusiveExpr } from '../utils/mexicoCityDayBounds.js';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function createChecada(req, res, next) {
   const { empleado_id, tipo, origen, lat, lng, metodo, dispositivo_id } = req.body;
@@ -75,12 +78,14 @@ export async function listChecadas(req, res, next) {
       conditions.push(`e.sede_id = $${values.length}`);
     }
     if (desde) {
+      if (!DATE_RE.test(desde)) return res.status(400).json({ error: 'desde must be YYYY-MM-DD' });
       values.push(desde);
-      conditions.push(`c.timestamp >= $${values.length}`);
+      conditions.push(`c.timestamp >= ${mexicoCityDayStartExpr(values.length)}`);
     }
     if (hasta) {
+      if (!DATE_RE.test(hasta)) return res.status(400).json({ error: 'hasta must be YYYY-MM-DD' });
       values.push(hasta);
-      conditions.push(`c.timestamp <= $${values.length}`);
+      conditions.push(`c.timestamp < ${mexicoCityDayEndExclusiveExpr(values.length)}`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

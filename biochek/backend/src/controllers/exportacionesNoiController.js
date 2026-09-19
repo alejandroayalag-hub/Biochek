@@ -1,6 +1,7 @@
 import { pool } from '../db/pool.js';
 import { formatChecadasForNoi } from '../utils/noiExportFormat.js';
 import { savePlainFile, readPlainFile } from '../utils/plainFileStorage.js';
+import { mexicoCityDayStartExpr, mexicoCityDayEndExclusiveExpr } from '../utils/mexicoCityDayBounds.js';
 
 export async function createExportacion(req, res, next) {
   try {
@@ -16,8 +17,8 @@ export async function createExportacion(req, res, next) {
     const result = await pool.query(
       `SELECT c.timestamp, e.codigo_noi, c.tipo
        FROM checadas c JOIN empleados e ON e.id = c.empleado_id
-       WHERE c.timestamp >= ($1::date::timestamp AT TIME ZONE 'America/Mexico_City')
-         AND c.timestamp <  (($2::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City')
+       WHERE c.timestamp >= ${mexicoCityDayStartExpr(1)}
+         AND c.timestamp <  ${mexicoCityDayEndExclusiveExpr(2)}
        ORDER BY c.timestamp ASC`,
       [desde, hasta]
     );

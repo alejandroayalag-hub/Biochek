@@ -4,7 +4,7 @@
 // function is the single place to edit once that's confirmed; nothing
 // else in the codebase depends on this output shape.
 
-const NOI_TIMEZONE = 'America/Mexico_City';
+import { MEXICO_CITY_TZ as NOI_TIMEZONE } from './mexicoCityDayBounds.js';
 
 function csvField(value) {
   return `"${String(value).replace(/"/g, '""')}"`;
