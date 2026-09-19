@@ -85,7 +85,7 @@ export async function createChecadaMobile(req, res, next) {
   try {
     const enrolamientoResult = await pool.query(
       `SELECT embedding_cifrado FROM enrolamientos_biometricos
-       WHERE empleado_id = $1 AND estado = 'aprobado'
+       WHERE empleado_id = $1 AND estado = 'aprobado' AND anonimizado_at IS NULL
        ORDER BY fecha_enrolamiento DESC LIMIT 1`,
       [empleadoId]
     );

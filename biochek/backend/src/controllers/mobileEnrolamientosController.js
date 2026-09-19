@@ -38,11 +38,13 @@ export async function createEnrolamiento(req, res, next) {
 export async function getEnrolamientoEstado(req, res, next) {
   try {
     const result = await pool.query(
-      `SELECT estado FROM enrolamientos_biometricos
+      `SELECT estado, anonimizado_at FROM enrolamientos_biometricos
        WHERE empleado_id = $1 ORDER BY created_at DESC LIMIT 1`,
       [req.user.empleado_id]
     );
-    res.json({ estado: result.rows[0]?.estado ?? null });
+    const row = result.rows[0];
+    const estado = row && row.anonimizado_at === null ? row.estado : null;
+    res.json({ estado });
   } catch (err) {
     next(err);
   }

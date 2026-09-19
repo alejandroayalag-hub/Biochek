@@ -25,18 +25,28 @@ export async function createExportacion(req, res, next) {
     const csv = formatChecadasForNoi(result.rows);
     const archivo = savePlainFile(csv, 'exportaciones_noi');
 
-    const insert = await pool.query(
-      `INSERT INTO exportaciones_noi (desde, hasta, archivo, disparado_por)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, to_char(desde, 'YYYY-MM-DD') AS desde, to_char(hasta, 'YYYY-MM-DD') AS hasta,
-                 archivo, disparado_por, created_at`,
-      [desde, hasta, archivo, req.user.id]
-    );
-
-    await pool.query(
-      `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES ($1, $2, $3)`,
-      [req.user.id, 'generar_exportacion_noi', `exportacion_id=${insert.rows[0].id}, desde=${desde}, hasta=${hasta}`]
-    );
+    const client = await pool.connect();
+    let insert;
+    try {
+      await client.query('BEGIN');
+      insert = await client.query(
+        `INSERT INTO exportaciones_noi (desde, hasta, archivo, disparado_por)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, to_char(desde, 'YYYY-MM-DD') AS desde, to_char(hasta, 'YYYY-MM-DD') AS hasta,
+                   archivo, disparado_por, created_at`,
+        [desde, hasta, archivo, req.user.id]
+      );
+      await client.query(
+        `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES ($1, $2, $3)`,
+        [req.user.id, 'generar_exportacion_noi', `exportacion_id=${insert.rows[0].id}, desde=${desde}, hasta=${hasta}`]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
     res.status(201).json({ ...insert.rows[0], total: result.rows.length });
   } catch (err) {

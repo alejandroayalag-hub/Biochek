@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import crypto from 'node:crypto';
 import { encryptBuffer, decryptBuffer } from './cipher.js';
@@ -19,4 +19,12 @@ export function saveEncryptedFile(base64Data, subdir) {
 export function readEncryptedFile(relativePath) {
   const payload = readFileSync(join(uploadsDir(), relativePath));
   return decryptBuffer(payload);
+}
+
+export function deleteEncryptedFile(relativePath) {
+  try {
+    unlinkSync(join(uploadsDir(), relativePath));
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
 }

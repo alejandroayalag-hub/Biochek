@@ -415,6 +415,37 @@ test('geofence and timestamp rejections do not count toward the repeated-match-f
   assert.equal(alertRows.rows.length, 0);
 });
 
+test('POST /api/mobile/checadas for an employee with an anonymized (purged) enrollment returns 403, not 500', async () => {
+  const sede = await pool.query(
+    `INSERT INTO sedes (nombre, lat, lng, radio_metros) VALUES ('Planta Anonimizado Test', 20.6736, -103.344, 100) RETURNING id`
+  );
+  const empleado = await pool.query(
+    `INSERT INTO empleados (nombre, codigo_noi, sede_id, estado) VALUES ('Anonimizado Test', 'E960', $1, 'activo') RETURNING id`,
+    [sede.rows[0].id]
+  );
+  const anonEmpleadoId = empleado.rows[0].id;
+  const anonToken = jwt.sign({ empleado_id: anonEmpleadoId, role: 'empleado' }, process.env.JWT_SECRET);
+
+  await pool.query(
+    `INSERT INTO enrolamientos_biometricos (empleado_id, tipo, embedding_cifrado, foto_urls, fecha_expiracion_retencion, estado, anonimizado_at)
+     VALUES ($1, 'rostro', NULL, '{}', now() - interval '1 day', 'aprobado', now())`,
+    [anonEmpleadoId]
+  );
+
+  const res = await fetch(`${baseUrl}/api/mobile/checadas`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${anonToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(checadaPayload()),
+  });
+  assert.equal(res.status, 403);
+
+  const estadoRes = await fetch(`${baseUrl}/api/mobile/enrolamiento/estado`, {
+    headers: { Authorization: `Bearer ${anonToken}` },
+  });
+  const estadoBody = await estadoRes.json();
+  assert.equal(estadoBody.estado, null);
+});
+
 test.after(async () => {
   server.close();
   await pool.end();
