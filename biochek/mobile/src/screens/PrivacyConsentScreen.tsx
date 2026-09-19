@@ -38,7 +38,12 @@ export function PrivacyConsentScreen({ onAccepted }: Props) {
       <ScrollView style={styles.scroll}>
         <Text style={styles.texto}>{aviso.texto}</Text>
       </ScrollView>
-      <Pressable style={styles.checkboxRow} onPress={() => setChecked(prev => !prev)}>
+      <Pressable
+        style={styles.checkboxRow}
+        onPress={() => setChecked(prev => !prev)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked }}
+      >
         <View style={[styles.checkbox, checked && styles.checkboxChecked]} />
         <Text>Acepto el aviso de privacidad</Text>
       </Pressable>
