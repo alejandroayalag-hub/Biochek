@@ -33,6 +33,11 @@ export async function createExportacion(req, res, next) {
       [desde, hasta, archivo, req.user.id]
     );
 
+    await pool.query(
+      `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES ($1, $2, $3)`,
+      [req.user.id, 'generar_exportacion_noi', `exportacion_id=${insert.rows[0].id}, desde=${desde}, hasta=${hasta}`]
+    );
+
     res.status(201).json({ ...insert.rows[0], total: result.rows.length });
   } catch (err) {
     next(err);
@@ -62,6 +67,11 @@ export async function descargarExportacion(req, res, next) {
     const result = await pool.query('SELECT archivo FROM exportaciones_noi WHERE id = $1', [id]);
     const row = result.rows[0];
     if (!row) return res.status(404).json({ error: 'not found' });
+
+    await pool.query(
+      `INSERT INTO audit_log (usuario_id, accion, detalle) VALUES ($1, $2, $3)`,
+      [req.user.id, 'descargar_exportacion_noi', `exportacion_id=${id}`]
+    );
 
     const content = readPlainFile(row.archivo);
     res.set('Content-Type', 'text/csv');

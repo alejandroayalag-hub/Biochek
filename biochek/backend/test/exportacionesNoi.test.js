@@ -14,6 +14,7 @@ test.before(async () => {
   process.env.UPLOADS_DIR = TEST_UPLOADS_DIR;
 
   // Clean up in correct order (respecting foreign keys)
+  await pool.query(`DELETE FROM audit_log WHERE usuario_id IN (SELECT id FROM usuarios WHERE email LIKE 'noi-test%')`);
   await pool.query('DELETE FROM exportaciones_noi');
   await pool.query('DELETE FROM checadas');
   await pool.query('DELETE FROM enrolamientos_biometricos');
@@ -90,6 +91,12 @@ test('POST /api/exportaciones-noi generates a CSV and records it for admin', asy
   // Finding 2 regression: response must report how many checadas were exported.
   assert.equal(body.total, 2);
   exportacionId = body.id;
+
+  const audit = await pool.query(
+    `SELECT usuario_id, detalle FROM audit_log WHERE accion = 'generar_exportacion_noi' ORDER BY id DESC LIMIT 1`
+  );
+  assert.equal(audit.rows[0].usuario_id, 40);
+  assert.match(audit.rows[0].detalle, new RegExp(`exportacion_id=${exportacionId}`));
 });
 
 test('POST /api/exportaciones-noi with a malformed desde returns 400 (Finding 1 regression)', async () => {
@@ -131,6 +138,12 @@ test('GET /api/exportaciones-noi/:id/descargar returns the generated CSV content
   assert.ok(text.includes('E940'));
   assert.ok(text.includes('entrada'));
   assert.ok(text.includes('salida'));
+
+  const audit = await pool.query(
+    `SELECT usuario_id, detalle FROM audit_log WHERE accion = 'descargar_exportacion_noi' ORDER BY id DESC LIMIT 1`
+  );
+  assert.equal(audit.rows[0].usuario_id, 40);
+  assert.match(audit.rows[0].detalle, new RegExp(`exportacion_id=${exportacionId}`));
 });
 
 test('GET /api/exportaciones-noi/:id/descargar returns 404 for an unknown id', async () => {
@@ -167,6 +180,7 @@ test('POST /api/exportaciones-noi includes a Mexico-City-evening checada that fa
 test.after(async () => {
   server.close();
   // Clean up database records in correct order (respecting foreign keys)
+  await pool.query('DELETE FROM audit_log WHERE usuario_id IN (40, 41)');
   await pool.query('DELETE FROM exportaciones_noi WHERE disparado_por IN (40, 41)');
   await pool.query('DELETE FROM checadas WHERE empleado_id = $1', [empleadoId]);
   await pool.query('DELETE FROM enrolamientos_biometricos WHERE empleado_id = $1', [empleadoId]);
