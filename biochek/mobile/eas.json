@@ -3,10 +3,12 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://biochek.havocdev.mx" }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://biochek.havocdev.mx" }
     }
   }
 }

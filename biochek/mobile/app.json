@@ -14,6 +14,7 @@
       }
     },
     "android": {
+      "package": "mx.havocdev.biochek",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -32,6 +33,12 @@
     "plugins": [
       "expo-secure-store",
       "react-native-fast-tflite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "367defad-cbfa-47df-8bd8-523af4072fd8"
+      }
+    },
+    "owner": "alxpho"
   }
 }
